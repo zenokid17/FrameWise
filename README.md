@@ -7,10 +7,6 @@ A lightweight, honest performance toolkit for Windows 10 & 11. A live FPS / stat
 ![RAM](https://img.shields.io/badge/RAM-%3C30MB-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> ⚠️ Replace `FrameWise` everywhere with your own project name if you prefer something else (find-and-replace across the repo).
-
----
-
 ## What it does
 
 FrameWise has two parts:
