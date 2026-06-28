@@ -1,0 +1,71 @@
+[package]
+name = "framewise"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+description = "Lightweight, anti-cheat-safe Windows FPS/stats overlay and audit-and-apply optimization assistant."
+authors = ["FrameWise contributors"]
+license = "MIT"
+repository = "https://github.com/your-org/framewise"
+readme = "README.md"
+keywords = ["fps", "overlay", "presentmon", "windows", "performance"]
+categories = ["visualization", "os::windows-apis"]
+
+[lib]
+name = "framewise"
+path = "src/lib.rs"
+
+[[bin]]
+name = "framewise"
+path = "src/main.rs"
+# The binary embeds a requireAdministrator manifest, so its test harness can't
+# launch unelevated. Unit tests live in the library target instead.
+test = false
+
+[dependencies]
+# Config + serialization
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# Errors + logging
+anyhow = "1"
+log = "0.4"
+
+# Cross-cutting system metrics (CPU%, RAM, per-process usage). Lightweight,
+# no background service. GPU usage is collected separately via PDH (see stats).
+sysinfo = "0.33"
+
+# Registry reads for OS build detection and read-only audit checks
+# (HAGS state, Game Mode). No registry writes happen without explicit consent.
+winreg = "0.52"
+
+# System tray icon + menu (battle-tested, used by Tauri). Avoids hand-rolling
+# Shell_NotifyIcon and keeps our raw Win32 surface area small.
+tray-icon = "0.19"
+
+# Global show/hide hotkey
+global-hotkey = "0.6"
+
+[dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_HiDpi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_System_Performance",
+    "Win32_Security",
+]
+
+[build-dependencies]
+# Embeds app.manifest (requireAdministrator + per-monitor DPI awareness).
+embed-resource = "2"
+
+[profile.release]
+opt-level = "z"     # optimize for size; this is a UI app, not a hot loop
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

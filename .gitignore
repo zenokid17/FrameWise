@@ -1,0 +1,22 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo lock is kept for the binary (committed on purpose)
+
+# FrameWise runtime files (generated next to the executable at runtime)
+framewise.toml
+framewise.log
+framewise-changes.jsonl
+
+# Bundled third-party tools the user provides locally (see README)
+/PresentMon*.exe
+PresentMon*.exe
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini

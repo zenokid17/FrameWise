@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(git --version)",
+      "Bash(rustup target *)",
+      "PowerShell($ErrorActionPreference='SilentlyContinue'; \"rustc: \" + \\(Get-Command rustc\\).Source; \"cargo: \" + \\(Get-Command cargo\\).Source; \"rustup: \" + \\(Get-Command rustup\\).Source; \"cargo home: $env:CARGO_HOME\"; Get-ChildItem \"$env:USERPROFILE\\\\.cargo\\\\bin\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "PowerShell($root = \"C:\\\\Users\\\\Master\\\\Desktop\\\\FrameWise - zenokid\"; $dirs = @\\(\".github\\\\workflows\",\"docs\",\"assets\",\"src\\\\platform\",\"src\\\\overlay\",\"src\\\\stats\",\"src\\\\tray\",\"src\\\\audit\"\\); foreach \\($d in $dirs\\) { New-Item -ItemType Directory -Force -Path \\(Join-Path $root $d\\) | Out-Null }; Get-ChildItem -Recurse -Directory $root | Select-Object FullName)"
+    ]
+  }
+}
