@@ -90,8 +90,9 @@ pub struct Hotkey {
 impl Default for Hotkey {
     fn default() -> Self {
         Hotkey {
-            modifiers: vec!["ALT".into(), "SHIFT".into()],
-            key: "F10".into(),
+            // Ctrl+Alt+O ("O" = Overlay). Chosen to avoid common conflicts.
+            modifiers: vec!["CTRL".into(), "ALT".into()],
+            key: "O".into(),
         }
     }
 }

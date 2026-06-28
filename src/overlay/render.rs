@@ -1,6 +1,7 @@
-//! Pure formatting for the overlay: turns a `StatSnapshot` into the lines of
-//! text to draw, with a colour hint per line. Kept free of Win32 so it can be
-//! unit-tested (and so the drawing code stays small).
+//! Pure formatting for the overlay: turns a `StatSnapshot` into rows of
+//! (label, value) with a colour hint per row. Kept free of Win32 so it can be
+//! unit-tested (and so the drawing code stays small). The label is drawn in a
+//! muted colour and the value in its accent colour for a cleaner look.
 
 use crate::config::Stats;
 use crate::stats::StatSnapshot;
@@ -14,29 +15,32 @@ pub enum LineKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Line {
-    pub text: String,
+    pub label: String,
+    pub value: String,
     pub kind: LineKind,
 }
 
-/// RGB colour for a line kind.
+/// Accent colour for a value, by line kind.
 pub fn color_for(kind: LineKind) -> (u8, u8, u8) {
     match kind {
-        LineKind::Fps => (120, 230, 130),
-        LineKind::Low => (230, 200, 120),
-        LineKind::Normal => (225, 228, 235),
+        LineKind::Fps => (122, 224, 138),
+        LineKind::Low => (236, 198, 120),
+        LineKind::Normal => (228, 232, 240),
     }
 }
 
-const LABEL_WIDTH: usize = 8;
+/// Muted colour used for every label.
+pub const LABEL_COLOR: (u8, u8, u8) = (138, 144, 156);
 
 fn row(label: &str, value: String, kind: LineKind) -> Line {
     Line {
-        text: format!("{label:<LABEL_WIDTH$}{value}"),
+        label: label.to_string(),
+        value,
         kind,
     }
 }
 
-/// Build the visible overlay lines from the enabled stats and the latest values.
+/// Build the visible overlay rows from the enabled stats and the latest values.
 ///
 /// `fps_available` reflects whether PresentMon is running. When it isn't, the
 /// FPS-derived rows show a short "n/a" notice instead of disappearing silently,
@@ -117,9 +121,10 @@ mod tests {
     fn shows_presentmon_notice_when_unavailable() {
         let snap = StatSnapshot::default();
         let lines = build_lines(&all_on(), &snap, false);
-        assert!(lines[0].text.contains("n/a (PresentMon)"));
+        assert_eq!(lines[0].label, "FPS");
+        assert!(lines[0].value.contains("n/a (PresentMon)"));
         // With FPS unavailable, low/frame rows are omitted, not shown as "—".
-        assert!(!lines.iter().any(|l| l.text.starts_with("1% low")));
+        assert!(!lines.iter().any(|l| l.label == "1% low"));
     }
 
     #[test]
@@ -134,11 +139,17 @@ mod tests {
             ram_total_mb: Some(32_768),
         };
         let lines = build_lines(&all_on(), &snap, true);
-        let joined: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
-        assert!(joined.iter().any(|t| t.contains("144"))); // fps rounded
-        assert!(joined.iter().any(|t| t.contains("6.9 ms")));
-        assert!(joined.iter().any(|t| t.contains("23%")));
-        assert!(joined.iter().any(|t| t.contains("12.5 / 32.0 GB")));
+        let val = |label: &str| {
+            lines
+                .iter()
+                .find(|l| l.label == label)
+                .map(|l| l.value.as_str())
+                .unwrap_or("")
+        };
+        assert_eq!(val("FPS"), "144"); // rounded
+        assert_eq!(val("Frame"), "6.9 ms");
+        assert_eq!(val("CPU"), "23%");
+        assert_eq!(val("RAM"), "12.5 / 32.0 GB");
     }
 
     #[test]
@@ -151,6 +162,6 @@ mod tests {
             ..Default::default()
         };
         let lines = build_lines(&all_on(), &snap, true);
-        assert!(!lines.iter().any(|l| l.text.starts_with("GPU")));
+        assert!(!lines.iter().any(|l| l.label == "GPU"));
     }
 }

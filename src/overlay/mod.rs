@@ -16,9 +16,9 @@ use windows::core::w;
 use windows::Win32::Foundation::{BOOL, COLORREF, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontIndirectW,
-    CreateSolidBrush, DeleteDC, DeleteObject, EndPaint, FillRect, GetDC, GetTextExtentPoint32W,
-    InvalidateRect, ReleaseDC, SelectObject, SetBkMode, SetTextColor, TextOutW, HFONT, HGDIOBJ,
-    LOGFONTW, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
+    CreateRoundRectRgn, CreateSolidBrush, DeleteDC, DeleteObject, EndPaint, FillRect, GetDC,
+    GetTextExtentPoint32W, InvalidateRect, ReleaseDC, SelectObject, SetBkMode, SetTextColor,
+    SetWindowRgn, TextOutW, HFONT, HGDIOBJ, LOGFONTW, PAINTSTRUCT, SRCCOPY, TRANSPARENT,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
@@ -38,8 +38,8 @@ const TIMER_ID: usize = 1;
 const FPS_RECENT: Duration = Duration::from_millis(1000);
 /// If the game hasn't presented within this long, FPS is shown as unknown.
 const FPS_STALE: Duration = Duration::from_millis(1500);
-/// Background colour of the overlay box (0x00BBGGRR via `rgb`).
-const BG: (u8, u8, u8) = (15, 15, 20);
+/// Background colour of the overlay panel.
+const BG: (u8, u8, u8) = (18, 18, 24);
 
 /// Heap state owned by the window (pointer stored in GWLP_USERDATA).
 struct OverlayState {
@@ -51,6 +51,8 @@ struct OverlayState {
     lines: Vec<render::Line>,
     pad: i32,
     line_height: i32,
+    /// X offset where value text starts (labels start at `pad`).
+    value_x: i32,
 }
 
 fn rgb(r: u8, g: u8, b: u8) -> COLORREF {
@@ -141,6 +143,7 @@ impl Overlay {
                 lines: Vec::new(),
                 pad: 8,
                 line_height: 0,
+                value_x: 8,
             });
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, Box::into_raw(state) as isize);
 
@@ -215,9 +218,10 @@ unsafe fn on_timer(hwnd: HWND, state: &mut OverlayState) {
         &snap,
         state.tele.fps_available(),
     );
-    let (w, h, row_h) = measure(hwnd, state.font, &lines, state.pad);
+    let (w, h, row_h, value_x) = measure(hwnd, state.font, &lines, state.pad);
     state.lines = lines;
     state.line_height = row_h;
+    state.value_x = value_x;
 
     let (x, y) = position_for(
         state.config.overlay.position,
@@ -227,33 +231,60 @@ unsafe fn on_timer(hwnd: HWND, state: &mut OverlayState) {
         margin,
     );
     let _ = SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE);
+
+    // Rounded corners: clip the window to a round rectangle (the system takes
+    // ownership of the region, so we don't free it).
+    let radius = ((10.0 * scale) as i32).max(2);
+    let rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, radius, radius);
+    let _ = SetWindowRgn(hwnd, rgn, BOOL(1));
+
     let _ = InvalidateRect(hwnd, None, BOOL(1));
 }
 
-unsafe fn measure(hwnd: HWND, font: HFONT, lines: &[render::Line], pad: i32) -> (i32, i32, i32) {
+/// Measure the rows and compute panel size. Returns `(width, height, row_height,
+/// value_x)` where `value_x` is the x offset at which value text is drawn (the
+/// label column ends just before it).
+unsafe fn measure(
+    hwnd: HWND,
+    font: HFONT,
+    lines: &[render::Line],
+    pad: i32,
+) -> (i32, i32, i32, i32) {
     let screen = GetDC(hwnd);
     let memdc = CreateCompatibleDC(screen);
     let old = SelectObject(memdc, HGDIOBJ(font.0));
 
-    let mut max_w = 0i32;
-    let mut line_h = 0i32;
-    for line in lines {
-        let wide: Vec<u16> = line.text.encode_utf16().collect();
+    let text_width = |s: &str| -> (i32, i32) {
+        let wide: Vec<u16> = s.encode_utf16().collect();
         let mut sz = SIZE::default();
         if GetTextExtentPoint32W(memdc, &wide, &mut sz).as_bool() {
-            max_w = max_w.max(sz.cx);
-            line_h = line_h.max(sz.cy);
+            (sz.cx, sz.cy)
+        } else {
+            (0, 0)
         }
+    };
+
+    let mut label_w = 0i32;
+    let mut value_w = 0i32;
+    let mut line_h = 0i32;
+    for line in lines {
+        let (lw, lh) = text_width(&line.label);
+        let (vw, vh) = text_width(&line.value);
+        label_w = label_w.max(lw);
+        value_w = value_w.max(vw);
+        line_h = line_h.max(lh.max(vh));
     }
 
     SelectObject(memdc, old);
     let _ = DeleteDC(memdc);
     ReleaseDC(hwnd, screen);
 
-    let row_h = line_h + (line_h as f32 * 0.18) as i32;
-    let w = (max_w + pad * 2).max(1);
+    let gap = (pad as f32 * 1.6) as i32; // space between label and value columns
+    let value_x = pad + label_w + gap;
+    let row_h = line_h + (line_h as f32 * 0.22) as i32;
+    let w = (value_x + value_w + pad).max(1);
     let h = (row_h * lines.len() as i32 + pad * 2).max(1);
-    (w, h, row_h)
+    (w, h, row_h, value_x)
 }
 
 fn position_for(pos: Position, mon: RECT, w: i32, h: i32, margin: i32) -> (i32, i32) {
@@ -284,12 +315,20 @@ unsafe fn on_paint(hwnd: HWND, state: &OverlayState) {
     SetBkMode(memdc, TRANSPARENT);
     let old_font = SelectObject(memdc, HGDIOBJ(state.font.0));
 
+    let (lr, lg, lb) = render::LABEL_COLOR;
     let mut y = state.pad;
     for line in &state.lines {
+        // Muted label.
+        SetTextColor(memdc, rgb(lr, lg, lb));
+        let label: Vec<u16> = line.label.encode_utf16().collect();
+        let _ = TextOutW(memdc, state.pad, y, &label);
+
+        // Accent-coloured value.
         let (r, g, b) = render::color_for(line.kind);
         SetTextColor(memdc, rgb(r, g, b));
-        let wide: Vec<u16> = line.text.encode_utf16().collect();
-        let _ = TextOutW(memdc, state.pad, y, &wide);
+        let value: Vec<u16> = line.value.encode_utf16().collect();
+        let _ = TextOutW(memdc, state.value_x, y, &value);
+
         y += state.line_height;
     }
 
