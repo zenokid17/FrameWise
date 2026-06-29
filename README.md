@@ -92,7 +92,7 @@ cargo build --release
 
 ## Configuration
 
-Settings are stored in `config.toml` next to the executable and are created on first run. You can edit it directly or use the tray → Settings menu.
+Settings are stored in `framewise.toml` next to the executable and are created on first run. You can edit it directly, then relaunch — the tray menu's **Open config file…** opens it for you.
 
 ---
 
